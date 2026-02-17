@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skener Faktúr — PDF + Obrázky → Excel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f1017;--bg2:#13141d;--bg3:#181926;--border:#1c1e2e;--border2:#252838;
+  --text:#cdd0dc;--text2:#8b8fa3;--text3:#636987;--text4:#4e5268;
+  --white:#f0f0f0;--purple:#a78bfa;--blue:#2563eb;--violet:#7c3aed;
+  --green:#22c55e;--red:#f87171;--yellow:#eab308;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--purple)}
+
+/* Header */
+.header{border-bottom:1px solid var(--border);background:linear-gradient(180deg,#15161f,var(--bg))}
+.header-inner{max-width:1060px;margin:0 auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--violet),var(--blue));display:flex;align-items:center;justify-content:center;box-shadow:0 2px 16px rgba(124,58,237,0.3)}
+.h1{font-size:18px;font-weight:700;color:var(--white);letter-spacing:-0.3px}
+.tagline{font-size:12px;color:var(--text3)}
+.main{max-width:1060px;margin:0 auto;padding:28px 24px}
+
+/* API Key */
+.api-bar{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.api-bar label{font-size:13px;color:var(--text2);white-space:nowrap}
+.api-bar input{flex:1;min-width:200px;padding:8px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;outline:none}
+.api-bar input:focus{border-color:var(--violet)}
+.api-bar .hint{font-size:11px;color:var(--text4);width:100%}
+.api-bar .saved{font-size:12px;color:var(--green);display:none}
+
+/* Drop zone */
+.drop{border:2px dashed var(--border2);border-radius:16px;padding:56px 24px;text-align:center;cursor:pointer;background:var(--bg2);transition:border-color 0.2s}
+.drop.over{border-color:var(--violet);background:#14152a}
+.drop-title{font-size:17px;font-weight:500;color:#9ca0b8;margin:14px 0 6px}
+.drop-sub{font-size:13px;color:var(--text4);margin-bottom:16px}
+.badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.badge{font-size:11px;padding:3px 10px;border-radius:6px;background:#1a1d2e;color:var(--text3);font-weight:600}
+.badge.ok{background:#1a3a2a;color:#4ade80}
+
+/* Panel */
+.panel{background:var(--bg2);border-radius:14px;border:1px solid var(--border);overflow:hidden}
+.panel-head{padding:18px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.panel-title{font-size:16px;font-weight:600;color:var(--white)}
+.panel-sub{font-size:12px;color:var(--text3);margin-top:2px}
+
+/* Buttons */
+.btn{padding:9px 22px;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;border:none;transition:opacity 0.15s}
+.btn:hover{opacity:0.9}
+.btn-primary{background:linear-gradient(135deg,var(--violet),var(--blue));color:#fff;box-shadow:0 2px 12px rgba(124,58,237,0.3)}
+.btn-stop{border:1px solid #7f1d1d;background:rgba(127,29,29,0.2);color:var(--red)}
+.btn-reset{padding:7px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit}
+.btn-excel{display:flex;align-items:center;gap:8px;padding:14px 24px;border-radius:10px;border:none;background:linear-gradient(135deg,#166534,#15803d);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 12px rgba(22,101,52,0.3)}
+
+/* Progress */
+.prog-wrap{padding:12px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.prog-bar{flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--violet),var(--blue));transition:width 0.4s ease}
+.prog-text{font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:80px;text-align:right}
+
+/* File list */
+.file-list{max-height:320px;overflow-y:auto}
+.file-row{display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid #141520;font-size:13px;transition:background 0.15s}
+.file-row.active{background:rgba(124,58,237,0.08)}
+.file-row.done{opacity:0.6}
+.file-row.err{background:rgba(127,29,29,0.08)}
+.file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-size{font-size:11px;color:var(--text4);font-family:'JetBrains Mono',monospace}
+.check{color:var(--green);font-weight:700;font-size:14px}
+.err-mark{color:var(--red);font-weight:700;font-size:14px}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:14px;height:14px;border:2px solid rgba(124,58,237,0.2);border-top-color:var(--purple);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;flex-shrink:0}
+
+/* Stats */
+.stats-bar{display:flex;gap:12px;align-items:stretch;margin-bottom:20px;flex-wrap:wrap}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;flex-direction:column;gap:2px;flex:1;min-width:100px}
+.stat-v{font-size:22px;font-weight:700;color:var(--white);font-family:'JetBrains Mono',monospace}
+.stat-l{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px}
+
+/* Table */
+.t-wrap{border-radius:12px;border:1px solid var(--border);overflow:auto;background:var(--bg2)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:11px 14px;background:var(--bg3);color:var(--text3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);position:sticky;top:0}
+td{padding:10px 14px;border-bottom:1px solid #141520;color:var(--text)}
+tr.clickable{cursor:pointer;transition:background 0.1s}
+tr.clickable:hover{background:rgba(124,58,237,0.04)}
+tr.alt{background:rgba(28,30,46,0.3)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+.t-badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+.t-pdf{background:rgba(239,68,68,0.12);color:var(--red)}
+.t-img{background:rgba(96,165,250,0.12);color:#60a5fa}
+
+/* Detail */
+.detail{margin-top:16px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;animation:fadeIn 0.25s ease}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dh4{margin:0 0 8px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;font-weight:600}
+.field{display:flex;gap:6px;margin-bottom:3px}
+.f-label{font-size:12px;color:var(--text4);min-width:70px}
+.f-val{font-size:13px;color:var(--text)}
+.totals-box{background:var(--bg3);border-radius:10px;padding:14px 16px;border:1px solid var(--border)}
+.tot-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--text2)}
+.notes-box{background:var(--bg3);border-radius:10px;padding:14px 16px;border:1px solid var(--border)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Responsive */
+@media(max-width:700px){
+  .detail-grid{grid-template-columns:1fr}
+  .stats-bar{flex-direction:column}
+  .api-bar{flex-direction:column;align-items:stretch}
+  .api-bar input{min-width:auto}
+}
+
+/* Hidden */
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="9" y1="13" x2="15" y2="13"/>
+          <line x1="9" y1="17" x2="13" y2="17"/>
+        </svg>
+      </div>
+      <div>
+        <div class="h1">Skener Faktúr</div>
+        <div class="tagline">PDF + obrázky → Excel</div>
+      </div>
+    </div>
+    <button class="btn-reset hidden" id="resetBtn" onclick="resetAll()">Nový batch</button>
+  </div>
+</header>
+
+<main class="main">
+  <!-- API Key -->
+  <div class="api-bar">
+    <label for="apiKey">Anthropic API kľúč:</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-..." oninput="saveKey()">
+    <span class="saved" id="keySaved">✓ uložené</span>
+    <div class="hint">Kľúč sa ukladá len lokálne vo vašom prehliadači. <a href="https://console.anthropic.com/settings/keys" target="_blank">Získať kľúč</a></div>
+  </div>
+
+  <!-- Drop Zone -->
+  <div class="drop" id="dropZone" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleDrop(event)" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" multiple style="display:none" onchange="handleFileSelect(this.files)">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#636987" stroke-width="1.2" style="opacity:0.5">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+      <line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 11 15 14"/>
+    </svg>
+    <p class="drop-title">Pretiahnite súbory alebo kliknite</p>
+    <p class="drop-sub">PDF (aj viacstranové), JPEG, PNG, GIF, WebP</p>
+    <div class="badges">
+      <span class="badge">PDF</span><span class="badge">JPG</span><span class="badge">PNG</span>
+      <span class="badge ok">Viacstranové faktúry ✓</span>
+    </div>
+  </div>
+
+  <!-- Processing Panel -->
+  <div class="panel hidden" id="processPanel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title" id="fileCount"></div>
+        <div class="panel-sub" id="fileTypes"></div>
+      </div>
+      <div>
+        <button class="btn btn-primary" id="startBtn" onclick="processAll()">Spracovať všetko</button>
+        <button class="btn btn-stop hidden" id="stopBtn" onclick="stopProcessing()">Zastaviť</button>
+      </div>
+    </div>
+    <div class="prog-wrap hidden" id="progressWrap">
+      <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+      <span class="prog-text" id="progText">0 / 0</span>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="hidden" id="resultsSection">
+    <div class="stats-bar" id="statsBar"></div>
+    <div class="t-wrap"><table id="resultsTable"></table></div>
+    <div id="detailPanel"></div>
+  </div>
+</main>
+
+<script>
+const PROMPT = `You are a precise receipt and invoice data extractor. This may be a multi-page invoice or receipt. Analyze ALL pages and extract the complete information.
+
+Respond ONLY with a valid JSON object (no markdown, no backticks, no preamble) with this structure:
+{
+  "vendor": "Business/store name",
+  "vendor_address": "Full address if visible",
+  "date": "Date in YYYY-MM-DD format",
+  "time": "Time if visible, or null",
+  "currency": "3-letter currency code (e.g. EUR, USD, CZK, CAD)",
+  "items": [
+    {"description": "Item description", "quantity": 1, "unit_price": 0.00, "total": 0.00}
+  ],
+  "subtotal": 0.00,
+  "tax_rate": "percentage as string, e.g. '20%', or null",
+  "tax_amount": 0.00,
+  "total": 0.00,
+  "payment_method": "cash/card/transfer/unknown",
+  "invoice_number": "Invoice or receipt number if visible, or null",
+  "ico": "IČO if visible, or null",
+  "dic": "DIČ if visible, or null",
+  "ic_dph": "IČ DPH if visible, or null",
+  "iban": "IBAN if visible, or null",
+  "due_date": "Due date YYYY-MM-DD if visible, or null",
+  "order_number": "Order number if visible, or null",
+  "page_count": 1,
+  "notes": "Any other relevant info",
+  "confidence": "high/medium/low",
+  "language": "detected language"
+}
+
+Rules:
+- Multi-page: combine ALL items from ALL pages into one array
+- Use exact numbers shown, do not calculate
+- null for missing fields
+- Detect currency from context
+- Look for Slovak/Czech identifiers (IČO, DIČ, IČ DPH)
+- Look for IBAN, SWIFT/BIC, due dates`;
+
+let files = [];
+let results = [];
+let fileErrors = [];
+let aborted = false;
+let selectedIdx = null;
+
+// API Key persistence
+function saveKey() {
+  const k = document.getElementById('apiKey').value;
+  if (k) {
+    try { localStorage.setItem('anthropic_key', k); } catch(e) {}
+    const s = document.getElementById('keySaved');
+    s.style.display = 'inline';
+    setTimeout(() => s.style.display = 'none', 2000);
+  }
+}
+try {
+  const saved = localStorage.getItem('anthropic_key');
+  if (saved) document.getElementById('apiKey').value = saved;
+} catch(e) {}
+
+function isPDF(f) { return f.type === 'application/pdf'; }
+function isImage(f) { return ['image/jpeg','image/png','image/gif','image/webp'].includes(f.type); }
+function isValid(f) { return isPDF(f) || isImage(f); }
+function fmt(n) { return n != null ? n.toLocaleString('sk-SK', {minimumFractionDigits:2}) : '—'; }
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  const items = e.dataTransfer.items;
+  if (items) {
+    const promises = [];
+    for (let i = 0; i < items.length; i++) {
+      const entry = items[i].webkitGetAsEntry?.();
+      if (entry) promises.push(traverseEntry(entry));
+      else if (items[i].kind === 'file') {
+        const f = items[i].getAsFile();
+        if (f) promises.push(Promise.resolve([f]));
+      }
+    }
+    Promise.all(promises).then(a => handleFileSelect(a.flat()));
+  } else {
+    handleFileSelect(e.dataTransfer.files);
+  }
+}
+
+function traverseEntry(entry) {
+  return new Promise(resolve => {
+    if (entry.isFile) entry.file(f => resolve([f]));
+    else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const all = [];
+      const read = () => reader.readEntries(entries => {
+        if (!entries.length) Promise.all(all.map(traverseEntry)).then(r => resolve(r.flat()));
+        else { all.push(...entries); read(); }
+      });
+      read();
+    } else resolve([]);
+  });
+}
+
+function handleFileSelect(fileList) {
+  const valid = Array.from(fileList).filter(isValid);
+  if (!valid.length) return;
+  valid.sort((a, b) => a.name.localeCompare(b.name));
+  files = valid;
+  results = [];
+  fileErrors = [];
+  selectedIdx = null;
+
+  document.getElementById('dropZone').classList.add('hidden');
+  document.getElementById('processPanel').classList.remove('hidden');
+  document.getElementById('resetBtn').classList.remove('hidden');
+  document.getElementById('resultsSection').classList.add('hidden');
+
+  const pdfC = files.filter(isPDF).length;
+  const imgC = files.filter(isImage).length;
+  document.getElementById('fileCount').textContent = `${files.length} ${files.length === 1 ? 'súbor' : files.length < 5 ? 'súbory' : 'súborov'}`;
+  document.getElementById('fileTypes').textContent = [pdfC && `${pdfC} PDF`, imgC && `${imgC} obrázkov`].filter(Boolean).join(' · ');
+
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = files.map((f, i) => {
+    const done = results.some(r => r._filename === f.name);
+    const err = fileErrors.some(e => e.file === f.name);
+    const cls = [done ? 'done' : '', err ? 'err' : ''].filter(Boolean).join(' ');
+    const icon = isPDF(f)
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`
+      : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+    const status = done ? '<span class="check">✓</span>' : err ? '<span class="err-mark">✗</span>' : '';
+    return `<div class="file-row ${cls}" id="frow-${i}">${icon}<span class="file-name">${f.name}</span><span class="file-size">${(f.size/1024).toFixed(0)} KB</span>${status}</div>`;
+  }).join('');
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Read failed'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function processAll() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('Prosím zadajte Anthropic API kľúč.'); return; }
+
+  aborted = false;
+  results = [];
+  fileErrors = [];
+  document.getElementById('startBtn').classList.add('hidden');
+  document.getElementById('stopBtn').classList.remove('hidden');
+  document.getElementById('progressWrap').classList.remove('hidden');
+  document.getElementById('resultsSection').classList.add('hidden');
+
+  for (let i = 0; i < files.length; i++) {
+    if (aborted) break;
+
+    // Highlight current
+    const row = document.getElementById(`frow-${i}`);
+    if (row) { row.classList.add('active'); row.innerHTML = row.innerHTML.replace('</div>', '<span class="spinner"></span></div>'); }
+
+    updateProgress(i);
+
+    try {
+      const base64 = await fileToBase64(files[i]);
+      const content = isPDF(files[i])
+        ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }, { type: 'text', text: PROMPT }]
+        : [{ type: 'image', source: { type: 'base64', media_type: files[i].type, data: base64 } }, { type: 'text', text: PROMPT }];
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content }] })
+      });
+
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const text = data.content.map(c => c.type === 'text' ? c.text : '').filter(Boolean).join('\n');
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      parsed._filename = files[i].name;
+      parsed._fileType = isPDF(files[i]) ? 'PDF' : 'Image';
+      results.push(parsed);
+    } catch (err) {
+      fileErrors.push({ file: files[i].name, error: err.message });
+    }
+
+    renderFileList();
+    updateProgress(i + 1);
+
+    if (i < files.length - 1) await new Promise(r => setTimeout(r, 600));
+  }
+
+  document.getElementById('stopBtn').classList.add('hidden');
+  showResults();
+}
+
+function stopProcessing() { aborted = true; }
+
+function updateProgress(done) {
+  const total = files.length;
+  const completed = results.length + fileErrors.length;
+  const pct = Math.round((completed / total) * 100);
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progText').textContent = `${completed} / ${total} (${pct}%)`;
+}
+
+function showResults() {
+  if (!results.length) return;
+  document.getElementById('processPanel').classList.add('hidden');
+  document.getElementById('resultsSection').classList.remove('hidden');
+
+  const totalSum = results.reduce((s, r) => s + (r.total || 0), 0);
+  const currencies = [...new Set(results.map(r => r.currency).filter(Boolean))];
+  const totalItems = results.reduce((s, r) => s + (r.items?.length || 0), 0);
+
+  let totalDisplay;
+  if (currencies.length <= 1) {
+    totalDisplay = `${fmt(totalSum)} ${currencies[0] || ''}`;
+  } else {
+    totalDisplay = currencies.map(c => {
+      const sum = results.filter(r => r.currency === c).reduce((s, r) => s + (r.total || 0), 0);
+      return `${fmt(sum)} ${c}`;
+    }).join(' · ');
+  }
+
+  let statsHtml = `
+    <div class="stat"><span class="stat-v">${results.length}</span><span class="stat-l">Spracované</span></div>`;
+  if (fileErrors.length) statsHtml += `<div class="stat" style="border-color:#7f1d1d"><span class="stat-v" style="color:var(--red)">${fileErrors.length}</span><span class="stat-l">Chyby</span></div>`;
+  statsHtml += `
+    <div class="stat"><span class="stat-v">${totalItems}</span><span class="stat-l">Položiek</span></div>
+    <div class="stat" style="flex:1.5"><span class="stat-v" style="color:var(--purple)">${totalDisplay}</span><span class="stat-l">Celkom</span></div>
+    <button class="btn-excel" onclick="generateExcel()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16"/></svg>
+      Stiahnuť Excel
+    </button>`;
+  document.getElementById('statsBar').innerHTML = statsHtml;
+
+  let tableHtml = `<thead><tr>
+    <th>Súbor</th><th>Typ</th><th>Dodávateľ</th><th>Dátum</th><th>Č. faktúry</th>
+    <th style="text-align:right">Celkom</th><th>Mena</th><th style="text-align:center">Pol.</th><th></th>
+  </tr></thead><tbody>`;
+  results.forEach((r, i) => {
+    const alt = i % 2 === 1 ? ' alt' : '';
+    const pages = (r.page_count || 1) > 1 ? ` ${r.page_count}p` : '';
+    const badgeCls = r._fileType === 'PDF' ? 't-pdf' : 't-img';
+    tableHtml += `<tr class="clickable${alt}" onclick="toggleDetail(${i})">
+      <td><span class="mono">${r._filename}</span></td>
+      <td><span class="t-badge ${badgeCls}">${r._fileType}${pages}</span></td>
+      <td>${r.vendor || '—'}</td>
+      <td class="mono">${r.date || '—'}</td>
+      <td class="mono">${r.invoice_number || '—'}</td>
+      <td style="text-align:right" class="mono"><b>${fmt(r.total)}</b></td>
+      <td>${r.currency || '—'}</td>
+      <td style="text-align:center">${r.items?.length || 0}</td>
+      <td style="text-align:center;color:var(--text3)" id="arrow-${i}">▼</td>
+    </tr>`;
+  });
+  tableHtml += '</tbody>';
+  document.getElementById('resultsTable').innerHTML = tableHtml;
+}
+
+function toggleDetail(idx) {
+  const panel = document.getElementById('detailPanel');
+  if (selectedIdx === idx) {
+    selectedIdx = null;
+    panel.innerHTML = '';
+    document.getElementById(`arrow-${idx}`).textContent = '▼';
+    return;
+  }
+  if (selectedIdx !== null) document.getElementById(`arrow-${selectedIdx}`).textContent = '▼';
+  selectedIdx = idx;
+  document.getElementById(`arrow-${idx}`).textContent = '▲';
+
+  const d = results[idx];
+  const cc = { high: 'var(--green)', medium: 'var(--yellow)', low: 'var(--red)' };
+
+  let itemsHtml = '';
+  if (d.items?.length) {
+    itemsHtml = `<div style="margin-top:16px"><h4 class="dh4">Položky (${d.items.length})</h4>
+    <div style="border-radius:8px;border:1px solid var(--border);overflow:auto"><table>
+    <thead><tr><th style="padding:8px 12px">Popis</th><th style="padding:8px 12px;text-align:right">Mn.</th>
+    <th style="padding:8px 12px;text-align:right">Jedn.</th><th style="padding:8px 12px;text-align:right">Spolu</th></tr></thead>
+    <tbody>${d.items.map(it => `<tr><td style="padding:7px 12px">${it.description}</td>
+    <td style="padding:7px 12px;text-align:right" class="mono">${it.quantity}</td>
+    <td style="padding:7px 12px;text-align:right" class="mono">${fmt(it.unit_price)}</td>
+    <td style="padding:7px 12px;text-align:right;font-weight:600" class="mono">${fmt(it.total)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  }
+
+  const field = (l, v) => v != null && v !== '' ? `<div class="field"><span class="f-label">${l}</span><span class="f-val">${v}</span></div>` : '';
+
+  panel.innerHTML = `<div class="detail">
+    <div class="detail-grid">
+      <div>
+        <h4 class="dh4">Dodávateľ</h4>
+        ${field('Názov', d.vendor)}${field('Adresa', d.vendor_address)}${field('IČO', d.ico)}
+        ${field('DIČ', d.dic)}${field('IČ DPH', d.ic_dph)}${field('IBAN', d.iban)}
+      </div>
+      <div>
+        <h4 class="dh4">Dokument</h4>
+        ${field('Dátum', d.date)}${field('Splatnosť', d.due_date)}${field('Č. faktúry', d.invoice_number)}
+        ${field('Obj. číslo', d.order_number)}${field('Platba', d.payment_method)}${field('Strany', d.page_count)}
+        ${field('Jazyk', d.language)}
+        <div class="field"><span class="f-label">Spoľahlivosť</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${cc[d.confidence]||'#666'};display:inline-block"></span>
+        <span class="f-val">${d.confidence || ''}</span></div>
+      </div>
+    </div>
+    ${itemsHtml}
+    <div class="detail-grid" style="margin-top:12px">
+      <div class="totals-box">
+        <div class="tot-row"><span>Základ</span><span class="mono">${fmt(d.subtotal)}</span></div>
+        ${d.tax_rate ? `<div class="tot-row"><span>DPH (${d.tax_rate})</span><span class="mono">${fmt(d.tax_amount)}</span></div>` : ''}
+        <div class="tot-row" style="border-top:2px solid var(--border2);padding-top:8px;margin-top:4px;font-weight:700;color:var(--white)">
+          <span>Celkom (${d.currency || '?'})</span>
+          <span class="mono" style="color:var(--purple);font-size:16px">${fmt(d.total)}</span>
+        </div>
+      </div>
+      ${d.notes ? `<div class="notes-box"><h4 class="dh4">Poznámky</h4><p style="font-size:13px;color:var(--text2);line-height:1.5">${d.notes}</p></div>` : '<div></div>'}
+    </div>
+  </div>`;
+}
+
+function generateExcel() {
+  if (!results.length) return;
+  const wb = XLSX.utils.book_new();
+
+  const summary = results.map(r => ({
+    'Súbor':r._filename,'Typ':r._fileType,'Strany':r.page_count||1,
+    'Dodávateľ':r.vendor||'','Dátum':r.date||'','Splatnosť':r.due_date||'',
+    'Č. faktúry':r.invoice_number||'','Obj. číslo':r.order_number||'',
+    'IČO':r.ico||'','DIČ':r.dic||'','IČ DPH':r.ic_dph||'','IBAN':r.iban||'',
+    'Mena':r.currency||'','Základ':r.subtotal??'','DPH sadzba':r.tax_rate||'',
+    'DPH suma':r.tax_amount??'','Celkom':r.total??'','Platba':r.payment_method||'',
+    'Adresa':r.vendor_address||'','Jazyk':r.language||'','Spoľahlivosť':r.confidence||'','Poznámky':r.notes||''
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(summary);
+  ws1['!cols'] = [{wch:25},{wch:6},{wch:6},{wch:28},{wch:12},{wch:12},{wch:16},{wch:14},{wch:12},{wch:14},{wch:16},{wch:28},{wch:6},{wch:11},{wch:10},{wch:11},{wch:11},{wch:10},{wch:32},{wch:8},{wch:10},{wch:36}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Prehľad');
+
+  const items = [];
+  results.forEach(r => (r.items||[]).forEach(it => items.push({
+    'Súbor':r._filename,'Dodávateľ':r.vendor||'','Dátum':r.date||'',
+    'Č. faktúry':r.invoice_number||'','Položka':it.description||'',
+    'Množstvo':it.quantity??'','Jedn. cena':it.unit_price??'','Spolu':it.total??'','Mena':r.currency||''
+  })));
+  if (items.length) {
+    const ws2 = XLSX.utils.json_to_sheet(items);
+    ws2['!cols'] = [{wch:25},{wch:28},{wch:12},{wch:16},{wch:40},{wch:9},{wch:11},{wch:11},{wch:6}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Položky');
+  }
+
+  const vm = new Map();
+  results.forEach(r => {
+    const k = r.vendor||'Neznámy';
+    if (!vm.has(k)) vm.set(k,{'Dodávateľ':k,'Adresa':r.vendor_address||'','IČO':r.ico||'','DIČ':r.dic||'','IČ DPH':r.ic_dph||'','IBAN':r.iban||'','Počet':0,'Suma':0,'Mena':r.currency||''});
+    const v = vm.get(k); v['Počet']++; v['Suma'] += r.total||0;
+  });
+  const ws3 = XLSX.utils.json_to_sheet(Array.from(vm.values()));
+  ws3['!cols'] = [{wch:28},{wch:32},{wch:12},{wch:14},{wch:16},{wch:28},{wch:8},{wch:14},{wch:6}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Dodávatelia');
+
+  if (fileErrors.length) {
+    const ws4 = XLSX.utils.json_to_sheet(fileErrors.map(e => ({'Súbor':e.file,'Chyba':e.error})));
+    XLSX.utils.book_append_sheet(wb, ws4, 'Chyby');
+  }
+
+  XLSX.writeFile(wb, `faktury_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+function resetAll() {
+  files = []; results = []; fileErrors = []; selectedIdx = null; aborted = false;
+  document.getElementById('dropZone').classList.remove('hidden');
+  document.getElementById('processPanel').classList.add('hidden');
+  document.getElementById('resultsSection').classList.add('hidden');
+  document.getElementById('resetBtn').classList.add('hidden');
+  document.getElementById('progressWrap').classList.add('hidden');
+  document.getElementById('startBtn').classList.remove('hidden');
+  document.getElementById('stopBtn').classList.add('hidden');
+  document.getElementById('fileInput').value = '';
+}
+</script>
+</body>
+</html>
